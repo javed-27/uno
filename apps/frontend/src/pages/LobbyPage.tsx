@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Container } from "../components/layout";
 import { useSocket } from "../services/socket";
@@ -6,13 +6,29 @@ import { useSocket } from "../services/socket";
 export default function LobbyPage() {
   const { roomCode } = useParams();
   const navigate = useNavigate();
-  const { isConnected } = useSocket();
-  const [players, setPlayers] = useState<string[]>([]); // Phase 5: populate from socket
-  const isHost = true; // Phase 5: determine from room state
+  const { room, playerId, isConnected, startGame, leaveRoom, error } =
+    useSocket();
 
-  const handleStartGame = () => {
-    // Phase 5: emit START_GAME event
-    navigate(`/game/${roomCode}`);
+  const isHost = room?.hostId === playerId;
+  const players = room?.players ?? [];
+  const canStart = isHost && players.length >= 2 &&
+    room?.gameState === "waiting";
+
+  const handleStartGame = async () => {
+    if (!room) return;
+    try {
+      await startGame();
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleLeaveRoom = async () => {
+    try {
+      await leaveRoom();
+    } catch (err) {
+      console.error(err);
+    }
   };
 
   return (
@@ -31,21 +47,27 @@ export default function LobbyPage() {
             </span>
           </div>
 
+          {error && (
+            <p className="mb-4 rounded border border-red-500 bg-red-600/20 px-3 py-2 text-sm text-red-100">
+              {error}
+            </p>
+          )}
+
           <div className="mb-6">
-            <h2 className="mb-3 font-semibold">Players ({players.length}/6)</h2>
+            <h2 className="mb-3 font-semibold">
+              Players ({players.length}/6)
+            </h2>
             <div className="space-y-2">
               {players.length > 0
                 ? (
-                  players.map((player, idx) => (
+                  players.map((player) => (
                     <div
-                      key={idx}
+                      key={player.id}
                       className="flex items-center justify-between rounded bg-gray-700 px-3 py-2"
                     >
-                      <span>{player}</span>
-                      {isHost && idx > 0 && (
-                        <button className="text-xs text-red-400 hover:text-red-300">
-                          Kick
-                        </button>
+                      <span>{player.name}</span>
+                      {player.isHost && (
+                        <span className="text-xs text-blue-300">Host</span>
                       )}
                     </div>
                   ))
@@ -58,22 +80,25 @@ export default function LobbyPage() {
             </div>
           </div>
 
-          {isHost && players.length >= 2 && (
-            <button
-              onClick={handleStartGame}
-              className="btn btn-primary w-full"
-            >
-              Start Game
-            </button>
-          )}
-          {!isHost && (
-            <p className="text-center text-sm text-gray-400">
-              Waiting for host to start game...
-            </p>
-          )}
+          {canStart
+            ? (
+              <button
+                onClick={handleStartGame}
+                className="btn btn-primary w-full"
+              >
+                Start Game
+              </button>
+            )
+            : (
+              <p className="text-center text-sm text-gray-400">
+                {isHost
+                  ? "Waiting for at least 2 players to start."
+                  : "Waiting for host to start the game..."}
+              </p>
+            )}
 
           <button
-            onClick={() => navigate("/")}
+            onClick={handleLeaveRoom}
             className="btn btn-secondary mt-3 w-full"
           >
             Leave Room

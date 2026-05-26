@@ -1,42 +1,63 @@
 import { Server as HttpServer } from "http";
 import { Server } from "socket.io";
-import { TypedSocket } from "./types";
+import {
+  ClientToServerEvents,
+  ServerToClientEvents,
+  TypedSocket,
+} from "./types";
 import { socketAuthMiddleware } from "./middleware/socketAuth";
 import { RoomManager } from "./rooms/RoomManager";
-import { PlayerManager } from "./rooms/PlayerManager";
 import { logger } from "./logger";
 import { config } from "./config";
+import { registerRoomHandlers } from "./socket/roomHandlers";
 
-// Initialize managers (will be extended in Phase 5)
 const roomManager = new RoomManager();
-const globalPlayerManager = new PlayerManager();
 
 export function createSocketServer(httpServer: HttpServer) {
-  const io = new Server(httpServer, {
-    cors: config.cors,
-  });
+  const io = new Server<ClientToServerEvents, ServerToClientEvents>(
+    httpServer,
+    {
+      cors: config.cors,
+    },
+  );
 
-  // Authentication middleware
   io.use((socket, next) => {
     socketAuthMiddleware(socket as any, next);
   });
 
-  // Connection handler
   io.on("connection", (socket: TypedSocket) => {
     logger.info("Client connected", {
       socketId: socket.id,
-      playerId: (socket as any).playerId,
+      playerId: socket.data.playerId,
     });
 
-    // Disconnect handler
+    registerRoomHandlers(io, socket, roomManager);
+
     socket.on("disconnect", () => {
-      logger.info("Client disconnected", { socketId: socket.id });
-    });
+      const roomId = socket.data.roomId;
+      const playerId = socket.data.playerId;
+      if (roomId && playerId) {
+        roomManager.removePlayerFromRoom(roomId, playerId);
+        const room = roomManager.getRoom(roomId);
+        if (room) {
+          for (const client of io.sockets.sockets.values()) {
+            if (client.rooms.has(roomId)) {
+              const publicRoom = roomManager.getPublicRoomState(
+                roomId,
+                client.data.playerId,
+              );
+              if (publicRoom) {
+                client.emit("ROOM_UPDATED", { room: publicRoom });
+              }
+            }
+          }
+        }
+      }
 
-    // Basic echo event for testing
-    socket.on("test", (data: unknown) => {
-      logger.debug("Received test event", { data });
-      socket.emit("test", { echo: data });
+      logger.info("Client disconnected", {
+        socketId: socket.id,
+        playerId: socket.data.playerId,
+      });
     });
   });
 

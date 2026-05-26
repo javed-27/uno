@@ -2,17 +2,20 @@
  * Player management utilities
  */
 
-export interface Player {
-  id: string;
-  name: string;
-  socketId: string;
-}
+import { Player } from "../types";
 
 export class PlayerManager {
   private players = new Map<string, Player>();
 
   addPlayer(id: string, name: string, socketId: string): Player {
-    const player: Player = { id, name, socketId };
+    const player: Player = {
+      id,
+      name,
+      socketId,
+      hand: [],
+      hasCalledUno: false,
+      isConnected: true,
+    };
     this.players.set(id, player);
     return player;
   }

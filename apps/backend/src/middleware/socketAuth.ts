@@ -6,8 +6,11 @@ import { Socket } from "socket.io";
 import { logger } from "../logger";
 
 export interface AuthenticatedSocket extends Socket {
-  playerId?: string;
-  sessionId?: string;
+  data: {
+    playerId?: string;
+    sessionId?: string;
+    roomId?: string;
+  };
 }
 
 /**
@@ -16,10 +19,9 @@ export interface AuthenticatedSocket extends Socket {
  */
 export function socketAuthMiddleware(
   socket: AuthenticatedSocket,
-  next: Function,
+  next: (err?: Error) => void,
 ) {
   try {
-    // For now, accept all connections with a generated session ID
     const playerId = socket.handshake.query.playerId as string;
     const sessionId = socket.handshake.query.sessionId as string;
 
@@ -28,8 +30,11 @@ export function socketAuthMiddleware(
       return next(new Error("Missing playerId or sessionId"));
     }
 
-    socket.playerId = playerId;
-    socket.sessionId = sessionId;
+    socket.data = {
+      ...(socket.data ?? {}),
+      playerId,
+      sessionId,
+    };
 
     logger.debug("Socket authenticated", { socketId: socket.id, playerId });
     next();
@@ -37,6 +42,6 @@ export function socketAuthMiddleware(
     logger.error("Socket auth error", {
       error: error instanceof Error ? error.message : String(error),
     });
-    next(error);
+    next(error as Error);
   }
 }

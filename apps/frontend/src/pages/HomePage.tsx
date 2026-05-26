@@ -1,28 +1,45 @@
 import React, { useState } from "react";
-import { useNavigate } from "react-router-dom";
 import { Container } from "../components/layout";
 import { useSocket } from "../services/socket";
 
 export default function HomePage() {
-  const navigate = useNavigate();
-  const { isConnected } = useSocket();
+  const { isConnected, createRoom, joinRoom, error } = useSocket();
   const [roomCode, setRoomCode] = useState("");
   const [playerName, setPlayerName] = useState(() =>
     localStorage.getItem("playerName") || ""
   );
+  const [busy, setBusy] = useState(false);
+  const [pageError, setPageError] = useState<string | null>(null);
 
-  const handleCreateRoom = () => {
-    if (playerName.trim()) {
-      localStorage.setItem("playerName", playerName);
-      // Phase 5: emit CREATE_ROOM event
-      navigate("/lobby/new");
+  const handleCreateRoom = async () => {
+    if (!playerName.trim()) return;
+
+    localStorage.setItem("playerName", playerName);
+    setBusy(true);
+    setPageError(null);
+
+    try {
+      await createRoom(playerName.trim());
+    } catch (err) {
+      setPageError(String(err));
+    } finally {
+      setBusy(false);
     }
   };
 
-  const handleJoinRoom = () => {
-    if (roomCode.trim() && playerName.trim()) {
-      localStorage.setItem("playerName", playerName);
-      navigate(`/lobby/${roomCode}`);
+  const handleJoinRoom = async () => {
+    if (!roomCode.trim() || !playerName.trim()) return;
+
+    localStorage.setItem("playerName", playerName);
+    setBusy(true);
+    setPageError(null);
+
+    try {
+      await joinRoom(roomCode.trim(), playerName.trim());
+    } catch (err) {
+      setPageError(String(err));
+    } finally {
+      setBusy(false);
     }
   };
 
@@ -45,8 +62,13 @@ export default function HomePage() {
           </span>
         </div>
 
+        {(pageError || error) && (
+          <div className="mb-6 rounded border border-red-500 bg-red-600/20 p-3 text-sm text-red-100">
+            {pageError || error}
+          </div>
+        )}
+
         <div className="grid gap-6 md:grid-cols-2">
-          {/* Create Room */}
           <div className="card">
             <h2 className="mb-4 text-xl font-bold">Create Room</h2>
             <input
@@ -58,13 +80,13 @@ export default function HomePage() {
             />
             <button
               onClick={handleCreateRoom}
-              className="btn btn-primary w-full"
+              disabled={!playerName.trim() || busy}
+              className="btn btn-primary w-full disabled:opacity-50"
             >
               Create New Game
             </button>
           </div>
 
-          {/* Join Room */}
           <div className="card">
             <h2 className="mb-4 text-xl font-bold">Join Room</h2>
             <input
@@ -84,7 +106,7 @@ export default function HomePage() {
             />
             <button
               onClick={handleJoinRoom}
-              disabled={!roomCode.trim()}
+              disabled={!roomCode.trim() || !playerName.trim() || busy}
               className="btn btn-primary w-full disabled:opacity-50"
             >
               Join Game
