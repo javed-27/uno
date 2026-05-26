@@ -1,0 +1,8 @@
+# Placeholder frontend Dockerfile
+FROM node:18-alpine
+WORKDIR /app
+COPY apps/frontend/package.json ./
+RUN npm install
+COPY apps/frontend ./apps/frontend
+WORKDIR /app/apps/frontend
+CMD ["npm", "run", "dev"]
